@@ -59,6 +59,11 @@ var app = (function () {
         const unsub = store.subscribe(...callbacks);
         return unsub.unsubscribe ? () => unsub.unsubscribe() : unsub;
     }
+    function get_store_value(store) {
+        let value;
+        subscribe(store, _ => value = _)();
+        return value;
+    }
     function component_subscribe(component, store, callback) {
         component.$$.on_destroy.push(subscribe(store, callback));
     }
@@ -114,14 +119,6 @@ var app = (function () {
             if (k[0] !== '$')
                 result[k] = props[k];
         return result;
-    }
-    function compute_rest_props(props, keys) {
-        const rest = {};
-        keys = new Set(keys);
-        for (const k in props)
-            if (!keys.has(k) && k[0] !== '$')
-                rest[k] = props[k];
-        return rest;
     }
 
     const is_client = typeof window !== 'undefined';
@@ -227,35 +224,6 @@ var app = (function () {
             node.removeAttribute(attribute);
         else if (node.getAttribute(attribute) !== value)
             node.setAttribute(attribute, value);
-    }
-    /**
-     * List of attributes that should always be set through the attr method,
-     * because updating them through the property setter doesn't work reliably.
-     * In the example of `width`/`height`, the problem is that the setter only
-     * accepts numeric values, but the attribute can also be set to a string like `50%`.
-     * If this list becomes too big, rethink this approach.
-     */
-    const always_set_through_set_attribute = ['width', 'height'];
-    function set_attributes(node, attributes) {
-        // @ts-ignore
-        const descriptors = Object.getOwnPropertyDescriptors(node.__proto__);
-        for (const key in attributes) {
-            if (attributes[key] == null) {
-                node.removeAttribute(key);
-            }
-            else if (key === 'style') {
-                node.style.cssText = attributes[key];
-            }
-            else if (key === '__value') {
-                node.value = node[key] = attributes[key];
-            }
-            else if (descriptors[key] && descriptors[key].set && always_set_through_set_attribute.indexOf(key) === -1) {
-                node[key] = attributes[key];
-            }
-            else {
-                attr(node, key, attributes[key]);
-            }
-        }
     }
     function children(element) {
         return Array.from(element.childNodes);
@@ -365,34 +333,6 @@ var app = (function () {
      */
     function onDestroy(fn) {
         get_current_component().$$.on_destroy.push(fn);
-    }
-    /**
-     * Creates an event dispatcher that can be used to dispatch [component events](/docs#template-syntax-component-directives-on-eventname).
-     * Event dispatchers are functions that can take two arguments: `name` and `detail`.
-     *
-     * Component events created with `createEventDispatcher` create a
-     * [CustomEvent](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent).
-     * These events do not [bubble](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#Event_bubbling_and_capture).
-     * The `detail` argument corresponds to the [CustomEvent.detail](https://developer.mozilla.org/en-US/docs/Web/API/CustomEvent/detail)
-     * property and can contain any type of data.
-     *
-     * https://svelte.dev/docs#run-time-svelte-createeventdispatcher
-     */
-    function createEventDispatcher() {
-        const component = get_current_component();
-        return (type, detail, { cancelable = false } = {}) => {
-            const callbacks = component.$$.callbacks[type];
-            if (callbacks) {
-                // TODO are there situations where events could be dispatched
-                // in a server (non-DOM) environment?
-                const event = custom_event(type, detail, { cancelable });
-                callbacks.slice().forEach(fn => {
-                    fn.call(component, event);
-                });
-                return !event.defaultPrevented;
-            }
-            return true;
-        };
     }
     /**
      * Associates an arbitrary `context` object with the current component and the specified `key`
@@ -1222,75 +1162,6 @@ var app = (function () {
         return match || default_ || null;
     };
     /**
-     * Add the query to the pathname if a query is given
-     * @param {string} pathname
-     * @param {string} [query]
-     * @return {string}
-     */
-    const addQuery = (pathname, query) => pathname + (query ? `?${query}` : "");
-    /**
-     * Resolve URIs as though every path is a directory, no files. Relative URIs
-     * in the browser can feel awkward because not only can you be "in a directory",
-     * you can be "at a file", too. For example:
-     *
-     *  browserSpecResolve('foo', '/bar/') => /bar/foo
-     *  browserSpecResolve('foo', '/bar') => /foo
-     *
-     * But on the command line of a file system, it's not as complicated. You can't
-     * `cd` from a file, only directories. This way, links have to know less about
-     * their current path. To go deeper you can do this:
-     *
-     *  <Link to="deeper"/>
-     *  // instead of
-     *  <Link to=`{${props.uri}/deeper}`/>
-     *
-     * Just like `cd`, if you want to go deeper from the command line, you do this:
-     *
-     *  cd deeper
-     *  # not
-     *  cd $(pwd)/deeper
-     *
-     * By treating every path as a directory, linking to relative paths should
-     * require less contextual information and (fingers crossed) be more intuitive.
-     * @param {string} to
-     * @param {string} base
-     * @return {string}
-     */
-    const resolve = (to, base) => {
-        // /foo/bar, /baz/qux => /foo/bar
-        if (to.startsWith("/")) return to;
-
-        const [toPathname, toQuery] = to.split("?");
-        const [basePathname] = base.split("?");
-        const toSegments = segmentize(toPathname);
-        const baseSegments = segmentize(basePathname);
-
-        // ?a=b, /users?b=c => /users?a=b
-        if (toSegments[0] === "") return addQuery(basePathname, toQuery);
-
-        // profile, /users/789 => /users/789/profile
-
-        if (!toSegments[0].startsWith(".")) {
-            const pathname = baseSegments.concat(toSegments).join("/");
-            return addQuery((basePathname === "/" ? "" : "/") + pathname, toQuery);
-        }
-
-        // ./       , /users/123 => /users/123
-        // ../      , /users/123 => /users
-        // ../..    , /users/123 => /
-        // ../../one, /a/b/c/d   => /a/b/one
-        // .././one , /a/b/c/d   => /a/b/c/one
-        const allSegments = baseSegments.concat(toSegments);
-        const segments = [];
-
-        allSegments.forEach((segment) => {
-            if (segment === "..") segments.pop();
-            else if (segment !== ".") segments.push(segment);
-        });
-
-        return addQuery("/" + segments.join("/"), toQuery);
-    };
-    /**
      * Combines the `basepath` and the `path` into one path.
      * @param {string} basepath
      * @param {string} path
@@ -1301,325 +1172,11 @@ var app = (function () {
             ? basepath
             : `${stripSlashes(basepath)}/${stripSlashes(path)}`
     )}/`;
-    /**
-     * Decides whether a given `event` should result in a navigation or not.
-     * @param {object} event
-     */
-    const shouldNavigate = (event) =>
-        !event.defaultPrevented &&
-        event.button === 0 &&
-        !(event.metaKey || event.altKey || event.ctrlKey || event.shiftKey);
 
     const canUseDOM = () =>
         typeof window !== "undefined" &&
         "document" in window &&
         "location" in window;
-
-    /* node_modules/svelte-routing/src/Link.svelte generated by Svelte v3.59.2 */
-    const file$5 = "node_modules/svelte-routing/src/Link.svelte";
-    const get_default_slot_changes$2 = dirty => ({ active: dirty & /*ariaCurrent*/ 4 });
-    const get_default_slot_context$2 = ctx => ({ active: !!/*ariaCurrent*/ ctx[2] });
-
-    function create_fragment$7(ctx) {
-    	let a;
-    	let current;
-    	let mounted;
-    	let dispose;
-    	const default_slot_template = /*#slots*/ ctx[17].default;
-    	const default_slot = create_slot(default_slot_template, ctx, /*$$scope*/ ctx[16], get_default_slot_context$2);
-
-    	let a_levels = [
-    		{ href: /*href*/ ctx[0] },
-    		{ "aria-current": /*ariaCurrent*/ ctx[2] },
-    		/*props*/ ctx[1],
-    		/*$$restProps*/ ctx[6]
-    	];
-
-    	let a_data = {};
-
-    	for (let i = 0; i < a_levels.length; i += 1) {
-    		a_data = assign(a_data, a_levels[i]);
-    	}
-
-    	const block = {
-    		c: function create() {
-    			a = element("a");
-    			if (default_slot) default_slot.c();
-    			set_attributes(a, a_data);
-    			add_location(a, file$5, 41, 0, 1414);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, a, anchor);
-
-    			if (default_slot) {
-    				default_slot.m(a, null);
-    			}
-
-    			current = true;
-
-    			if (!mounted) {
-    				dispose = listen_dev(a, "click", /*onClick*/ ctx[5], false, false, false, false);
-    				mounted = true;
-    			}
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (default_slot) {
-    				if (default_slot.p && (!current || dirty & /*$$scope, ariaCurrent*/ 65540)) {
-    					update_slot_base(
-    						default_slot,
-    						default_slot_template,
-    						ctx,
-    						/*$$scope*/ ctx[16],
-    						!current
-    						? get_all_dirty_from_scope(/*$$scope*/ ctx[16])
-    						: get_slot_changes(default_slot_template, /*$$scope*/ ctx[16], dirty, get_default_slot_changes$2),
-    						get_default_slot_context$2
-    					);
-    				}
-    			}
-
-    			set_attributes(a, a_data = get_spread_update(a_levels, [
-    				(!current || dirty & /*href*/ 1) && { href: /*href*/ ctx[0] },
-    				(!current || dirty & /*ariaCurrent*/ 4) && { "aria-current": /*ariaCurrent*/ ctx[2] },
-    				dirty & /*props*/ 2 && /*props*/ ctx[1],
-    				dirty & /*$$restProps*/ 64 && /*$$restProps*/ ctx[6]
-    			]));
-    		},
-    		i: function intro(local) {
-    			if (current) return;
-    			transition_in(default_slot, local);
-    			current = true;
-    		},
-    		o: function outro(local) {
-    			transition_out(default_slot, local);
-    			current = false;
-    		},
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(a);
-    			if (default_slot) default_slot.d(detaching);
-    			mounted = false;
-    			dispose();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$7.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function instance$7($$self, $$props, $$invalidate) {
-    	let ariaCurrent;
-    	const omit_props_names = ["to","replace","state","getProps","preserveScroll"];
-    	let $$restProps = compute_rest_props($$props, omit_props_names);
-    	let $location;
-    	let $base;
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('Link', slots, ['default']);
-    	let { to = "#" } = $$props;
-    	let { replace = false } = $$props;
-    	let { state = {} } = $$props;
-    	let { getProps = () => ({}) } = $$props;
-    	let { preserveScroll = false } = $$props;
-    	const location = getContext(LOCATION);
-    	validate_store(location, 'location');
-    	component_subscribe($$self, location, value => $$invalidate(14, $location = value));
-    	const { base } = getContext(ROUTER);
-    	validate_store(base, 'base');
-    	component_subscribe($$self, base, value => $$invalidate(15, $base = value));
-    	const { navigate } = getContext(HISTORY);
-    	const dispatch = createEventDispatcher();
-    	let href, isPartiallyCurrent, isCurrent, props;
-
-    	const onClick = event => {
-    		dispatch("click", event);
-
-    		if (shouldNavigate(event)) {
-    			event.preventDefault();
-
-    			// Don't push another entry to the history stack when the user
-    			// clicks on a Link to the page they are currently on.
-    			const shouldReplace = $location.pathname === href || replace;
-
-    			navigate(href, {
-    				state,
-    				replace: shouldReplace,
-    				preserveScroll
-    			});
-    		}
-    	};
-
-    	$$self.$$set = $$new_props => {
-    		$$props = assign(assign({}, $$props), exclude_internal_props($$new_props));
-    		$$invalidate(6, $$restProps = compute_rest_props($$props, omit_props_names));
-    		if ('to' in $$new_props) $$invalidate(7, to = $$new_props.to);
-    		if ('replace' in $$new_props) $$invalidate(8, replace = $$new_props.replace);
-    		if ('state' in $$new_props) $$invalidate(9, state = $$new_props.state);
-    		if ('getProps' in $$new_props) $$invalidate(10, getProps = $$new_props.getProps);
-    		if ('preserveScroll' in $$new_props) $$invalidate(11, preserveScroll = $$new_props.preserveScroll);
-    		if ('$$scope' in $$new_props) $$invalidate(16, $$scope = $$new_props.$$scope);
-    	};
-
-    	$$self.$capture_state = () => ({
-    		createEventDispatcher,
-    		getContext,
-    		HISTORY,
-    		LOCATION,
-    		ROUTER,
-    		resolve,
-    		shouldNavigate,
-    		to,
-    		replace,
-    		state,
-    		getProps,
-    		preserveScroll,
-    		location,
-    		base,
-    		navigate,
-    		dispatch,
-    		href,
-    		isPartiallyCurrent,
-    		isCurrent,
-    		props,
-    		onClick,
-    		ariaCurrent,
-    		$location,
-    		$base
-    	});
-
-    	$$self.$inject_state = $$new_props => {
-    		if ('to' in $$props) $$invalidate(7, to = $$new_props.to);
-    		if ('replace' in $$props) $$invalidate(8, replace = $$new_props.replace);
-    		if ('state' in $$props) $$invalidate(9, state = $$new_props.state);
-    		if ('getProps' in $$props) $$invalidate(10, getProps = $$new_props.getProps);
-    		if ('preserveScroll' in $$props) $$invalidate(11, preserveScroll = $$new_props.preserveScroll);
-    		if ('href' in $$props) $$invalidate(0, href = $$new_props.href);
-    		if ('isPartiallyCurrent' in $$props) $$invalidate(12, isPartiallyCurrent = $$new_props.isPartiallyCurrent);
-    		if ('isCurrent' in $$props) $$invalidate(13, isCurrent = $$new_props.isCurrent);
-    		if ('props' in $$props) $$invalidate(1, props = $$new_props.props);
-    		if ('ariaCurrent' in $$props) $$invalidate(2, ariaCurrent = $$new_props.ariaCurrent);
-    	};
-
-    	if ($$props && "$$inject" in $$props) {
-    		$$self.$inject_state($$props.$$inject);
-    	}
-
-    	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*to, $base*/ 32896) {
-    			$$invalidate(0, href = resolve(to, $base.uri));
-    		}
-
-    		if ($$self.$$.dirty & /*$location, href*/ 16385) {
-    			$$invalidate(12, isPartiallyCurrent = $location.pathname.startsWith(href));
-    		}
-
-    		if ($$self.$$.dirty & /*href, $location*/ 16385) {
-    			$$invalidate(13, isCurrent = href === $location.pathname);
-    		}
-
-    		if ($$self.$$.dirty & /*isCurrent*/ 8192) {
-    			$$invalidate(2, ariaCurrent = isCurrent ? "page" : undefined);
-    		}
-
-    		$$invalidate(1, props = getProps({
-    			location: $location,
-    			href,
-    			isPartiallyCurrent,
-    			isCurrent,
-    			existingProps: $$restProps
-    		}));
-    	};
-
-    	return [
-    		href,
-    		props,
-    		ariaCurrent,
-    		location,
-    		base,
-    		onClick,
-    		$$restProps,
-    		to,
-    		replace,
-    		state,
-    		getProps,
-    		preserveScroll,
-    		isPartiallyCurrent,
-    		isCurrent,
-    		$location,
-    		$base,
-    		$$scope,
-    		slots
-    	];
-    }
-
-    class Link extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-
-    		init(this, options, instance$7, create_fragment$7, safe_not_equal, {
-    			to: 7,
-    			replace: 8,
-    			state: 9,
-    			getProps: 10,
-    			preserveScroll: 11
-    		});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "Link",
-    			options,
-    			id: create_fragment$7.name
-    		});
-    	}
-
-    	get to() {
-    		throw new Error("<Link>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set to(value) {
-    		throw new Error("<Link>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get replace() {
-    		throw new Error("<Link>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set replace(value) {
-    		throw new Error("<Link>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get state() {
-    		throw new Error("<Link>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set state(value) {
-    		throw new Error("<Link>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get getProps() {
-    		throw new Error("<Link>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set getProps(value) {
-    		throw new Error("<Link>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	get preserveScroll() {
-    		throw new Error("<Link>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set preserveScroll(value) {
-    		throw new Error("<Link>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-    }
 
     /* node_modules/svelte-routing/src/Route.svelte generated by Svelte v3.59.2 */
     const get_default_slot_changes$1 = dirty => ({ params: dirty & /*routeParams*/ 4 });
@@ -2932,12 +2489,152 @@ var app = (function () {
     	}
     }
 
-    const matrixSessionId = writable(null);
+    const storage = (key, initValue) => {
+        const store = writable(initValue);
+        // if (!browser) return store;
+        const storedValueStr = localStorage.getItem(key);
+        if (storedValueStr != null)
+            store.set(JSON.parse(storedValueStr));
+        store.subscribe((val) => {
+            if ([null, undefined].includes(val)) {
+                localStorage.removeItem(key);
+            }
+            else {
+                localStorage.setItem(key, JSON.stringify(val));
+            }
+        });
+        window.addEventListener('storage', () => {
+            const storedValueStr = localStorage.getItem(key);
+            if (storedValueStr == null)
+                return;
+            const localValue = JSON.parse(storedValueStr);
+            if (localValue !== get_store_value(store))
+                store.set(localValue);
+        });
+        return store;
+    };
 
-    /* src/components/ChatButton.svelte generated by Svelte v3.59.2 */
-    const file$3 = "src/components/ChatButton.svelte";
+    // import { writable } from 'svelte/store';
+    // export const matrixSessionId = writable(null);
+    const app$1 = storage("app", { matrixSessionId: null });
+
+    // import { writable } from 'svelte/store';
+    // export const isAuthenticated = writable(false);
+    const auth = storage("auth", { user: null });
+
+    const PUBLIC_CHAT_BASE_URL = "https://hydrogen-chat.vercel.app/#";
+
+    /* src/components/ChatBox.svelte generated by Svelte v3.59.2 */
+    const file$3 = "src/components/ChatBox.svelte";
 
     function create_fragment$4(ctx) {
+    	let div;
+    	let a;
+    	let mounted;
+    	let dispose;
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			a = element("a");
+    			a.textContent = "✕";
+    			attr_dev(a, "href", "#");
+    			attr_dev(a, "class", "close-btn svelte-19oz8pn");
+    			add_location(a, file$3, 29, 4, 1081);
+    			attr_dev(div, "id", "iframe-container");
+    			attr_dev(div, "class", "chatbox-container svelte-19oz8pn");
+    			add_location(div, file$3, 28, 0, 1023);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			append_dev(div, a);
+
+    			if (!mounted) {
+    				dispose = listen_dev(a, "click", closeChatBox, false, false, false, false);
+    				mounted = true;
+    			}
+    		},
+    		p: noop,
+    		i: noop,
+    		o: noop,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    			mounted = false;
+    			dispose();
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$4.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function closeChatBox() {
+    	const iframContainer = document.getElementById("iframe-container");
+    	iframContainer.style = "width: 0px; height: 0px;";
+    }
+
+    function instance$4($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('ChatBox', slots, []);
+
+    	onMount(() => {
+    		auth.subscribe(({ user }) => {
+    			if (user) {
+    				const iframContainer = document.getElementById("iframe-container");
+    				const iframe = document.createElement("iframe");
+    				iframe.src = `${PUBLIC_CHAT_BASE_URL}?loginToken=${user.username}+authen+${user.password}`;
+    				iframe.allow = "microphone; camera; fullscreen;";
+    				iframe.innerHTML = "<p>Your browser does not support iframes.</p>";
+    				iframe.style = "width: 100%; height: 100%; border: none;";
+    				iframContainer.appendChild(iframe);
+    			}
+    		});
+    	});
+
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ChatBox> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$capture_state = () => ({
+    		onMount,
+    		auth,
+    		PUBLIC_CHAT_BASE_URL,
+    		closeChatBox
+    	});
+
+    	return [];
+    }
+
+    class ChatBox extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$4, create_fragment$4, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "ChatBox",
+    			options,
+    			id: create_fragment$4.name
+    		});
+    	}
+    }
+
+    /* src/components/ChatButton.svelte generated by Svelte v3.59.2 */
+    const file$2 = "src/components/ChatButton.svelte";
+
+    function create_fragment$3(ctx) {
     	let button;
     	let t;
     	let mounted;
@@ -2947,8 +2644,8 @@ var app = (function () {
     		c: function create() {
     			button = element("button");
     			t = text(/*text*/ ctx[0]);
-    			attr_dev(button, "class", "open-chat-btn svelte-iiadbj");
-    			add_location(button, file$3, 38, 0, 1003);
+    			attr_dev(button, "class", "open-chat-btn svelte-hf58cf");
+    			add_location(button, file$2, 39, 0, 1045);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -2976,7 +2673,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$4.name,
+    		id: create_fragment$3.name,
     		type: "component",
     		source: "",
     		ctx
@@ -2985,15 +2682,15 @@ var app = (function () {
     	return block;
     }
 
-    function instance$4($$self, $$props, $$invalidate) {
+    function instance$3($$self, $$props, $$invalidate) {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('ChatButton', slots, []);
-    	let sessionId = false;
-    	let { roomId = null } = $$props;
+    	let sessionId = null;
+    	let { userId = null } = $$props;
     	let { name = "" } = $$props;
 
     	function openChatBox() {
-    		if (!roomId) {
+    		if (!userId) {
     			alert("Please select a room first");
     			return;
     		}
@@ -3004,38 +2701,39 @@ var app = (function () {
     		}
 
     		const iframe = document.querySelector("iframe");
-    		iframe.src = `https://hydrogen-chat.vercel.app/#/session/${sessionId}/room/${roomId}`;
+    		iframe.src = `${PUBLIC_CHAT_BASE_URL}/session/${sessionId}/user/${userId}`;
     		const iframContainer = document.getElementById("iframe-container");
-    		iframContainer.style = "width: 400px; height: 70vh";
+    		iframContainer.style = "width: 400px; height: 70vh; overflow: visible;";
     	}
 
     	let text = "Loading...";
 
     	onMount(() => {
-    		matrixSessionId.subscribe(loadedSessionId => {
-    			if (loadedSessionId) {
-    				sessionId = loadedSessionId;
+    		app$1.subscribe(({ matrixSessionId }) => {
+    			if (matrixSessionId) {
+    				sessionId = matrixSessionId;
     				$$invalidate(0, text = `Chat to ${name}`);
     			}
     		});
     	});
 
-    	const writable_props = ['roomId', 'name'];
+    	const writable_props = ['userId', 'name'];
 
     	Object.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ChatButton> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$$set = $$props => {
-    		if ('roomId' in $$props) $$invalidate(2, roomId = $$props.roomId);
+    		if ('userId' in $$props) $$invalidate(2, userId = $$props.userId);
     		if ('name' in $$props) $$invalidate(3, name = $$props.name);
     	};
 
     	$$self.$capture_state = () => ({
     		onMount,
-    		matrixSessionId,
+    		app: app$1,
+    		PUBLIC_CHAT_BASE_URL,
     		sessionId,
-    		roomId,
+    		userId,
     		name,
     		openChatBox,
     		text
@@ -3043,7 +2741,7 @@ var app = (function () {
 
     	$$self.$inject_state = $$props => {
     		if ('sessionId' in $$props) sessionId = $$props.sessionId;
-    		if ('roomId' in $$props) $$invalidate(2, roomId = $$props.roomId);
+    		if ('userId' in $$props) $$invalidate(2, userId = $$props.userId);
     		if ('name' in $$props) $$invalidate(3, name = $$props.name);
     		if ('text' in $$props) $$invalidate(0, text = $$props.text);
     	};
@@ -3052,27 +2750,27 @@ var app = (function () {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [text, openChatBox, roomId, name];
+    	return [text, openChatBox, userId, name];
     }
 
     class ChatButton extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$4, create_fragment$4, safe_not_equal, { roomId: 2, name: 3 });
+    		init(this, options, instance$3, create_fragment$3, safe_not_equal, { userId: 2, name: 3 });
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "ChatButton",
     			options,
-    			id: create_fragment$4.name
+    			id: create_fragment$3.name
     		});
     	}
 
-    	get roomId() {
+    	get userId() {
     		throw new Error("<ChatButton>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
 
-    	set roomId(value) {
+    	set userId(value) {
     		throw new Error("<ChatButton>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
 
@@ -3085,151 +2783,37 @@ var app = (function () {
     	}
     }
 
-    const isAuthenticated = writable(false);
-
-    /* src/components/ChatBox.svelte generated by Svelte v3.59.2 */
-
-    const file$2 = "src/components/ChatBox.svelte";
-
-    function create_fragment$3(ctx) {
-    	let div;
-    	let a;
-    	let t1;
-    	let iframe;
-    	let p;
-    	let iframe_src_value;
-    	let mounted;
-    	let dispose;
-
-    	const block = {
-    		c: function create() {
-    			div = element("div");
-    			a = element("a");
-    			a.textContent = "✕";
-    			t1 = space();
-    			iframe = element("iframe");
-    			p = element("p");
-    			p.textContent = "Your browser does not support iframes.";
-    			attr_dev(a, "href", "#");
-    			attr_dev(a, "class", "close-btn svelte-faqfag");
-    			add_location(a, file$2, 21, 4, 763);
-    			add_location(p, file$2, 27, 8, 942);
-    			attr_dev(iframe, "title", "Chat");
-    			if (!src_url_equal(iframe.src, iframe_src_value = /*iframeSrc*/ ctx[0])) attr_dev(iframe, "src", iframe_src_value);
-    			attr_dev(iframe, "allow", "microphone; camera; fullscreen;");
-    			attr_dev(iframe, "class", "svelte-faqfag");
-    			add_location(iframe, file$2, 22, 4, 827);
-    			attr_dev(div, "id", "iframe-container");
-    			attr_dev(div, "class", "chatbox-container svelte-faqfag");
-    			add_location(div, file$2, 20, 0, 705);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			append_dev(div, a);
-    			append_dev(div, t1);
-    			append_dev(div, iframe);
-    			append_dev(iframe, p);
-
-    			if (!mounted) {
-    				dispose = listen_dev(a, "click", closeChatBox, false, false, false, false);
-    				mounted = true;
-    			}
-    		},
-    		p: noop,
-    		i: noop,
-    		o: noop,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    			mounted = false;
-    			dispose();
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$3.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function closeChatBox() {
-    	// if (window.CHATBOX_LOADED) {
-    	//   const iframe = document.querySelector("iframe");
-    	//   iframe.src = baseUrl;
-    	// }
-    	const iframContainer = document.getElementById("iframe-container");
-
-    	// iframContainer.classList.remove("shown");
-    	// iframContainer.classList.add("hidden");
-    	iframContainer.style = "width: 0px; height: 0px; overflow: hidden;";
-    }
-
-    function instance$3($$self, $$props, $$invalidate) {
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('ChatBox', slots, []);
-    	let iframeSrc = "https://hydrogen-chat.vercel.app/#/?loginToken=agil.operator+authen+ABCxyz123@";
-    	const writable_props = [];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<ChatBox> was created with unknown prop '${key}'`);
-    	});
-
-    	$$self.$capture_state = () => ({ iframeSrc, closeChatBox });
-
-    	$$self.$inject_state = $$props => {
-    		if ('iframeSrc' in $$props) $$invalidate(0, iframeSrc = $$props.iframeSrc);
-    	};
-
-    	if ($$props && "$$inject" in $$props) {
-    		$$self.$inject_state($$props.$$inject);
-    	}
-
-    	return [iframeSrc];
-    }
-
-    class ChatBox extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {});
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "ChatBox",
-    			options,
-    			id: create_fragment$3.name
-    		});
-    	}
-    }
-
     /* src/Home.svelte generated by Svelte v3.59.2 */
 
-    const { console: console_1$1 } = globals;
+    const { console: console_1 } = globals;
     const file$1 = "src/Home.svelte";
 
     function create_fragment$2(ctx) {
     	let main;
-    	let h1;
+    	let a;
     	let t1;
-    	let p;
+    	let div0;
+    	let h1;
     	let t3;
-    	let chatbutton0;
-    	let t4;
-    	let chatbutton1;
+    	let p;
     	let t5;
+    	let img;
+    	let img_src_value;
+    	let t6;
+    	let div1;
+    	let chatbutton0;
+    	let t7;
+    	let chatbutton1;
+    	let t8;
     	let chatbox;
     	let current;
+    	let mounted;
+    	let dispose;
 
     	chatbutton0 = new ChatButton({
     			props: {
     				name: "James",
-    				roomId: "!vItKLiveJxzwiDjAEl:matrix.org"
+    				userId: "@jameslai:matrix.org"
     			},
     			$$inline: true
     		});
@@ -3237,7 +2821,7 @@ var app = (function () {
     	chatbutton1 = new ChatButton({
     			props: {
     				name: "Zn",
-    				roomId: "!YqbFfpfckwkARoUfYc:matrix.org"
+    				userId: "@blurzade:matrix.org"
     			},
     			$$inline: true
     		});
@@ -3247,37 +2831,66 @@ var app = (function () {
     	const block = {
     		c: function create() {
     			main = element("main");
+    			a = element("a");
+    			a.textContent = "Sign Out";
+    			t1 = space();
+    			div0 = element("div");
     			h1 = element("h1");
     			h1.textContent = "Welcome to the Home Page";
-    			t1 = space();
+    			t3 = space();
     			p = element("p");
     			p.textContent = "This is the public home page of the application.";
-    			t3 = space();
-    			create_component(chatbutton0.$$.fragment);
-    			t4 = space();
-    			create_component(chatbutton1.$$.fragment);
     			t5 = space();
+    			img = element("img");
+    			t6 = space();
+    			div1 = element("div");
+    			create_component(chatbutton0.$$.fragment);
+    			t7 = space();
+    			create_component(chatbutton1.$$.fragment);
+    			t8 = space();
     			create_component(chatbox.$$.fragment);
-    			add_location(h1, file$1, 27, 4, 876);
-    			add_location(p, file$1, 28, 4, 914);
-    			attr_dev(main, "class", "svelte-nk3kaa");
-    			add_location(main, file$1, 26, 0, 865);
+    			attr_dev(a, "href", "#");
+    			attr_dev(a, "class", "btn-sign-out svelte-ppu45s");
+    			add_location(a, file$1, 34, 4, 944);
+    			add_location(h1, file$1, 36, 8, 1043);
+    			add_location(p, file$1, 37, 8, 1085);
+    			attr_dev(img, "alt", "AGIL Logo");
+    			attr_dev(img, "class", "logo svelte-ppu45s");
+    			if (!src_url_equal(img.src, img_src_value = "https://raw.githubusercontent.com/mssfoobar/aoh-mobile/main/assets/agilradblack.png?token=GHSAT0AAAAAACK6MNQKYFFRBJAFMEVIEC4YZNGL5DQ")) attr_dev(img, "src", img_src_value);
+    			add_location(img, file$1, 38, 8, 1149);
+    			attr_dev(div0, "class", "padding svelte-ppu45s");
+    			add_location(div0, file$1, 35, 4, 1013);
+    			attr_dev(div1, "class", "btn-container padding svelte-ppu45s");
+    			add_location(div1, file$1, 44, 4, 1384);
+    			attr_dev(main, "class", "svelte-ppu45s");
+    			add_location(main, file$1, 33, 0, 933);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, main, anchor);
-    			append_dev(main, h1);
+    			append_dev(main, a);
     			append_dev(main, t1);
-    			append_dev(main, p);
-    			append_dev(main, t3);
-    			mount_component(chatbutton0, main, null);
-    			append_dev(main, t4);
-    			mount_component(chatbutton1, main, null);
-    			append_dev(main, t5);
+    			append_dev(main, div0);
+    			append_dev(div0, h1);
+    			append_dev(div0, t3);
+    			append_dev(div0, p);
+    			append_dev(div0, t5);
+    			append_dev(div0, img);
+    			append_dev(main, t6);
+    			append_dev(main, div1);
+    			mount_component(chatbutton0, div1, null);
+    			append_dev(div1, t7);
+    			mount_component(chatbutton1, div1, null);
+    			append_dev(main, t8);
     			mount_component(chatbox, main, null);
     			current = true;
+
+    			if (!mounted) {
+    				dispose = listen_dev(a, "click", /*signOut*/ ctx[0], false, false, false, false);
+    				mounted = true;
+    			}
     		},
     		p: noop,
     		i: function intro(local) {
@@ -3298,6 +2911,8 @@ var app = (function () {
     			destroy_component(chatbutton0);
     			destroy_component(chatbutton1);
     			destroy_component(chatbox);
+    			mounted = false;
+    			dispose();
     		}
     	};
 
@@ -3316,10 +2931,14 @@ var app = (function () {
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Home', slots, []);
 
+    	const signOut = () => {
+    		auth.set({ user: null });
+    	};
+
     	onMount(() => {
     		// Redirect to login if not authenticated
-    		isAuthenticated.subscribe(value => {
-    			if (!value) {
+    		auth.subscribe(({ user }) => {
+    			if (!user) {
     				// Logic to redirect to the login page
     				navigate("/login");
     			}
@@ -3327,27 +2946,31 @@ var app = (function () {
 
     		window.addEventListener("message", event => {
     			const data = event?.data;
-    			console.log(`Received message:`, data);
-    			if (data.type === "MatrixClientReady") matrixSessionId.set(data.sessionId);
+
+    			if (data.type === "MatrixClientReady") {
+    				console.log(`Received message:`, data);
+    				app$1.set({ matrixSessionId: data.sessionId });
+    			}
     		});
     	});
 
     	const writable_props = [];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1$1.warn(`<Home> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1.warn(`<Home> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$capture_state = () => ({
-    		matrixSessionId,
-    		ChatButton,
     		onMount,
     		navigate,
-    		isAuthenticated,
-    		ChatBox
+    		app: app$1,
+    		auth,
+    		ChatBox,
+    		ChatButton,
+    		signOut
     	});
 
-    	return [];
+    	return [signOut];
     }
 
     class Home extends SvelteComponentDev {
@@ -3365,8 +2988,6 @@ var app = (function () {
     }
 
     /* src/Login.svelte generated by Svelte v3.59.2 */
-
-    const { console: console_1 } = globals;
     const file = "src/Login.svelte";
 
     function create_fragment$1(ctx) {
@@ -3406,30 +3027,30 @@ var app = (function () {
     			button.textContent = "Login";
     			attr_dev(label0, "for", "username");
     			attr_dev(label0, "class", "svelte-bbdihd");
-    			add_location(label0, file, 25, 12, 724);
+    			add_location(label0, file, 19, 12, 583);
     			attr_dev(input0, "id", "username");
     			attr_dev(input0, "type", "text");
     			input0.required = true;
     			attr_dev(input0, "class", "svelte-bbdihd");
-    			add_location(input0, file, 26, 12, 775);
+    			add_location(input0, file, 20, 12, 634);
     			attr_dev(div0, "class", "form-group svelte-bbdihd");
-    			add_location(div0, file, 24, 8, 687);
+    			add_location(div0, file, 18, 8, 546);
     			attr_dev(label1, "for", "password");
     			attr_dev(label1, "class", "svelte-bbdihd");
-    			add_location(label1, file, 29, 12, 902);
+    			add_location(label1, file, 23, 12, 761);
     			attr_dev(input1, "id", "password");
     			attr_dev(input1, "type", "password");
     			input1.required = true;
     			attr_dev(input1, "class", "svelte-bbdihd");
-    			add_location(input1, file, 30, 12, 953);
+    			add_location(input1, file, 24, 12, 812);
     			attr_dev(div1, "class", "form-group svelte-bbdihd");
-    			add_location(div1, file, 28, 8, 865);
+    			add_location(div1, file, 22, 8, 724);
     			attr_dev(button, "type", "submit");
     			attr_dev(button, "class", "svelte-bbdihd");
-    			add_location(button, file, 37, 8, 1123);
-    			add_location(form, file, 23, 4, 633);
+    			add_location(button, file, 31, 8, 982);
+    			add_location(form, file, 17, 4, 492);
     			attr_dev(div2, "class", "login-container svelte-bbdihd");
-    			add_location(div2, file, 22, 0, 599);
+    			add_location(div2, file, 16, 0, 458);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -3498,16 +3119,15 @@ var app = (function () {
 
     	const handleLogin = () => {
     		// Here you would handle the login logic, possibly sending the credentials to a server
-    		console.log("Login attempt with username:", username, "and password:", password);
+    		auth.set({ user: { username, password } });
 
-    		isAuthenticated.set(true);
     		navigate("/");
     	}; // Prevent the form from submitting if you're handling the login asynchronously
 
     	const writable_props = [];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1.warn(`<Login> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Login> was created with unknown prop '${key}'`);
     	});
 
     	function input0_input_handler() {
@@ -3521,8 +3141,8 @@ var app = (function () {
     	}
 
     	$$self.$capture_state = () => ({
+    		auth,
     		navigate,
-    		isAuthenticated,
     		username,
     		password,
     		handleLogin
@@ -3554,23 +3174,21 @@ var app = (function () {
     	}
     }
 
+    const protectedRoutes = () => {
+        return new Promise((resolve) => {
+            auth.subscribe(({ user }) => {
+                if (user) {
+                    resolve(Home);
+                }
+                else {
+                    resolve(Login);
+                }
+            });
+        });
+    };
     const routes = {
-        '/login': Login,
-        '/': Home,
-        // '/': {
-        //     // This is a protected route
-        //     asyncComponent: () => {
-        //         return new Promise((resolve) => {
-        //             isAuthenticated.subscribe((value) => {
-        //                 if (value) {
-        //                     resolve(Home);
-        //                 } else {
-        //                     resolve(Login);
-        //                 }
-        //             });
-        //         });
-        //     },
-        // },
+        '/login': protectedRoutes,
+        '/': protectedRoutes,
     };
 
     /* src/App.svelte generated by Svelte v3.59.2 */
@@ -3584,7 +3202,7 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (11:1) {#each Object.entries(routes) as [path, RouteComponent]}
+    // (7:1) {#each Object.entries(routes) as [path, RouteComponent]}
     function create_each_block(ctx) {
     	let route;
     	let current;
@@ -3624,7 +3242,7 @@ var app = (function () {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(11:1) {#each Object.entries(routes) as [path, RouteComponent]}",
+    		source: "(7:1) {#each Object.entries(routes) as [path, RouteComponent]}",
     		ctx
     	});
 
@@ -3795,7 +3413,7 @@ var app = (function () {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<App> was created with unknown prop '${key}'`);
     	});
 
-    	$$self.$capture_state = () => ({ Router, Route, Link, routes });
+    	$$self.$capture_state = () => ({ Router, Route, routes });
     	return [];
     }
 

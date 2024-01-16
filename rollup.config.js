@@ -1,8 +1,8 @@
-import { spawn } from 'child_process';
 import svelte from 'rollup-plugin-svelte';
 import commonjs from '@rollup/plugin-commonjs';
 import terser from '@rollup/plugin-terser';
 import resolve from '@rollup/plugin-node-resolve';
+import typescript from '@rollup/plugin-typescript';
 import livereload from 'rollup-plugin-livereload';
 import css from 'rollup-plugin-css-only';
 import serve from 'rollup-plugin-serve';
@@ -40,6 +40,8 @@ export default {
 			exportConditions: ['svelte']
 		}),
 		commonjs(),
+
+		typescript(),
 
 		// In dev mode, call `npm run start` once
 		// the bundle has been generated

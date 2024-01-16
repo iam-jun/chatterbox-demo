@@ -1,14 +1,15 @@
 <script>
     import { onMount } from "svelte";
-    import { matrixSessionId } from "../../stores/app";
+    import { app } from "../stores/app";
+    import { PUBLIC_CHAT_BASE_URL } from "../constants";
 
-    let sessionId = false;
+    let sessionId = null;
 
-    export let roomId = null;
+    export let userId = null;
     export let name = "";
 
     function openChatBox() {
-        if (!roomId) {
+        if (!userId) {
             alert("Please select a room first");
             return;
         }
@@ -19,17 +20,17 @@
         }
 
         const iframe = document.querySelector("iframe");
-        iframe.src = `https://hydrogen-chat.vercel.app/#/session/${sessionId}/room/${roomId}`;
+        iframe.src = `${PUBLIC_CHAT_BASE_URL}/session/${sessionId}/user/${userId}`;
         const iframContainer = document.getElementById("iframe-container");
-        iframContainer.style = "width: 400px; height: 70vh";
+        iframContainer.style = "width: 400px; height: 70vh; overflow: visible;";
     }
 
     let text = "Loading...";
 
     onMount(() => {
-        matrixSessionId.subscribe((loadedSessionId) => {
-            if (loadedSessionId) {
-                sessionId = loadedSessionId;
+        app.subscribe(({ matrixSessionId }) => {
+            if (matrixSessionId) {
+                sessionId = matrixSessionId;
                 text = `Chat to ${name}`;
             }
         });
@@ -46,7 +47,8 @@
         border: none;
         border-radius: 20px;
         cursor: pointer;
-        color: green;
+        color: rgb(255, 255, 255);
+        background-color: rgb(101, 13, 13);
         /* background: no-repeat center url('../ui/res/chat-bubbles.svg'), linear-gradient(180deg, #7657F2 0%, #5C56F5 100%); */
         box-shadow:
             0px 1px 3px rgba(0, 0, 0, 0.1),

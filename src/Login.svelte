@@ -1,19 +1,13 @@
 <script>
+    import { auth } from "./stores/auth.ts";
     import { navigate } from "svelte-routing";
-    import { isAuthenticated } from "../stores/auth";
 
     let username = "";
     let password = "";
 
     const handleLogin = () => {
         // Here you would handle the login logic, possibly sending the credentials to a server
-        console.log(
-            "Login attempt with username:",
-            username,
-            "and password:",
-            password,
-        );
-        isAuthenticated.set(true);
+        auth.set({ user: { username, password } });
         navigate("/");
 
         // Prevent the form from submitting if you're handling the login asynchronously
