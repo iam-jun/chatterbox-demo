@@ -2540,10 +2540,10 @@ var app = (function () {
     			a.textContent = "✕";
     			attr_dev(a, "href", "#");
     			attr_dev(a, "class", "close-btn svelte-19oz8pn");
-    			add_location(a, file$3, 29, 4, 1081);
+    			add_location(a, file$3, 31, 4, 1127);
     			attr_dev(div, "id", "iframe-container");
     			attr_dev(div, "class", "chatbox-container svelte-19oz8pn");
-    			add_location(div, file$3, 28, 0, 1023);
+    			add_location(div, file$3, 30, 0, 1069);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -2591,6 +2591,7 @@ var app = (function () {
     		auth.subscribe(({ user }) => {
     			if (user) {
     				const iframContainer = document.getElementById("iframe-container");
+    				if (!iframContainer) return;
     				const iframe = document.createElement("iframe");
     				iframe.src = `${PUBLIC_CHAT_BASE_URL}?loginToken=${user.username}+authen+${user.password}`;
     				iframe.allow = "microphone; camera; fullscreen;";
