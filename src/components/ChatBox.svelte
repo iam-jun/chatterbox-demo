@@ -14,6 +14,8 @@
                 const iframContainer =
                     document.getElementById("iframe-container");
 
+                if (!iframContainer) return;
+
                 const iframe = document.createElement("iframe");
                 iframe.src = `${PUBLIC_CHAT_BASE_URL}?loginToken=${user.username}+authen+${user.password}`;
                 iframe.allow = "microphone; camera; fullscreen;";
