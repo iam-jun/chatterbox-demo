@@ -1,32 +1,33 @@
 <script>
-    // You can define your iframe source URL here
-    //Exp: http://localhost:3000/#/?loginToken=agil.operator+authen+ABCxyz123@
-
-    let iframeSrc =
-        "https://hydrogen-chat.vercel.app/#/?loginToken=agil.operator+authen+ABCxyz123@";
+    import { onMount } from "svelte";
+    import { auth } from "../stores/auth";
+    import { PUBLIC_CHAT_BASE_URL } from "../constants";
 
     function closeChatBox() {
-        // if (window.CHATBOX_LOADED) {
-        //   const iframe = document.querySelector("iframe");
-        //   iframe.src = baseUrl;
-        // }
-
         const iframContainer = document.getElementById("iframe-container");
-        // iframContainer.classList.remove("shown");
-        // iframContainer.classList.add("hidden");
-        iframContainer.style = "width: 0px; height: 0px; overflow: hidden;";
+        iframContainer.style = "width: 0px; height: 0px;";
     }
+
+    onMount(() => {
+        auth.subscribe(({ user }) => {
+            if (user) {
+                const iframContainer =
+                    document.getElementById("iframe-container");
+
+                const iframe = document.createElement("iframe");
+                iframe.src = `${PUBLIC_CHAT_BASE_URL}?loginToken=${user.username}+authen+${user.password}`;
+                iframe.allow = "microphone; camera; fullscreen;";
+                iframe.innerHTML =
+                    "<p>Your browser does not support iframes.</p>";
+                iframe.style = "width: 100%; height: 100%; border: none;";
+                iframContainer.appendChild(iframe);
+            }
+        });
+    });
 </script>
 
 <div id="iframe-container" class="chatbox-container">
     <a href="#" class="close-btn" on:click={closeChatBox}>✕</a>
-    <iframe
-        title="Chat"
-        src={iframeSrc}
-        allow="microphone; camera; fullscreen;"
-    >
-        <p>Your browser does not support iframes.</p>
-    </iframe>
 </div>
 
 <style>
@@ -37,6 +38,7 @@
         width: 0px;
         height: 0px;
         border: none;
+        overflow: hidden;
         border-radius: 12px;
         box-shadow:
             0px 1px 3px rgba(0, 0, 0, 0.1),
@@ -48,12 +50,6 @@
             bottom: 0;
             right: 0;
         }
-    }
-
-    iframe {
-        border: none;
-        width: 100%;
-        height: 100%;
     }
 
     .close-btn {

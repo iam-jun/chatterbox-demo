@@ -1,0 +1,1 @@
+export const PUBLIC_CHAT_BASE_URL = "https://hydrogen-chat.vercel.app/#"
