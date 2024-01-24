@@ -12,6 +12,12 @@
     },
     "token": "syt_YWdpbC5vcGVyYXRvcg_fqjzcccMQTFnkMRMWZOS_0RBd0s",
     "invite_user": "@blurzade:matrix.org",
+    "invite_users": [
+        "@jameslai:matrix.org",
+        "@blurzade:matrix.org",
+        "@jun.coder:matrix.org"
+    ],
     "encrypt_room": false,
+    "avatar": "https://cdn-icons-png.flaticon.com/512/6596/6596121.png",
     "disable_composer_until_operator_join": false
 }
