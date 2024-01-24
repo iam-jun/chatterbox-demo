@@ -15,8 +15,8 @@ const protectedRoutes = () => {
 };
 
 const routes = {
-    '/login': protectedRoutes,
-    '/': protectedRoutes,
+    '/login': Home,
+    '/': Home,
 };
 
 export default routes;
