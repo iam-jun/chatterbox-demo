@@ -1,0 +1,17 @@
+{
+    "homeserver": "https://matrix.org",
+    "auto_join_room": "Internal matrix id of the room",
+    "username_prefix": "foobar",
+    "header": {
+        "title": "User name",
+        "avatar": "https://cdn-icons-png.flaticon.com/512/6596/6596121.png"
+    },
+    "footer": {
+        "chatterbox_link": "https://element.io/solutions/chatterbox-embedded-live-chat-for-customer-service",
+        "matrix_link": "https://matrix.org"
+    },
+    "token": "syt_YWdpbC5vcGVyYXRvcg_fqjzcccMQTFnkMRMWZOS_0RBd0s",
+    "invite_user": "@blurzade:matrix.org",
+    "encrypt_room": false,
+    "disable_composer_until_operator_join": false
+}
