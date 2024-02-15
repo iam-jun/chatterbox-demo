@@ -5,15 +5,15 @@
     export let userId = null;
     export let name = "";
 
-    // let disabled = true;
+    let disabled = true;
 
-    // onMount(() => {
-    //     app.subscribe(({ isChatterboxLoaded }) => {
-    //         if (isChatterboxLoaded) {
-    //             disabled = !isChatterboxLoaded;
-    //         }
-    //     });
-    // });
+    onMount(() => {
+        app.subscribe(({ isChatterboxLoaded }) => {
+            if (isChatterboxLoaded) {
+                disabled = !isChatterboxLoaded;
+            }
+        });
+    });
 </script>
 
 <div class="container">
@@ -25,7 +25,7 @@
         />
         <span>{name}</span>
     </div>
-    <a id={`chatterbox-button-${userId}`} class="chat-button">
+    <a id={`chatterbox-button-${userId}`} class="chat-button" class:disabled>
         <img
             class="chat-icon"
             src="https://e7.pngegg.com/pngimages/952/46/png-clipart-text-bubble-brand-logo-blue-font-chat-icon-angle-text.png"

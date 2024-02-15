@@ -231,6 +231,9 @@ var app = (function () {
     function set_input_value(input, value) {
         input.value = value == null ? '' : value;
     }
+    function toggle_class(element, name, toggle) {
+        element.classList[toggle ? 'add' : 'remove'](name);
+    }
     function custom_event(type, detail, { bubbles = false, cancelable = false } = {}) {
         const e = document.createEvent('CustomEvent');
         e.initCustomEvent(type, bubbles, cancelable, detail);
@@ -2553,19 +2556,20 @@ var app = (function () {
     			attr_dev(img0, "class", "avatar svelte-125guc8");
     			if (!src_url_equal(img0.src, img0_src_value = "https://img.freepik.com/free-vector/businessman-character-avatar-isolated_24877-60111.jpg?size=338&ext=jpg&ga=GA1.1.87170709.1707868800&semt=ais")) attr_dev(img0, "src", img0_src_value);
     			attr_dev(img0, "alt", "avatar");
-    			add_location(img0, file$2, 20, 8, 452);
-    			add_location(span, file$2, 25, 8, 691);
+    			add_location(img0, file$2, 20, 8, 428);
+    			add_location(span, file$2, 25, 8, 667);
     			attr_dev(div0, "class", "header svelte-125guc8");
-    			add_location(div0, file$2, 19, 4, 423);
+    			add_location(div0, file$2, 19, 4, 399);
     			attr_dev(img1, "class", "chat-icon svelte-125guc8");
     			if (!src_url_equal(img1.src, img1_src_value = "https://e7.pngegg.com/pngimages/952/46/png-clipart-text-bubble-brand-logo-blue-font-chat-icon-angle-text.png")) attr_dev(img1, "src", img1_src_value);
     			attr_dev(img1, "alt", "chat");
-    			add_location(img1, file$2, 28, 8, 793);
+    			add_location(img1, file$2, 28, 8, 784);
     			attr_dev(a, "id", a_id_value = `chatterbox-button-${/*userId*/ ctx[0]}`);
     			attr_dev(a, "class", "chat-button svelte-125guc8");
-    			add_location(a, file$2, 27, 4, 726);
+    			toggle_class(a, "disabled", /*disabled*/ ctx[2]);
+    			add_location(a, file$2, 27, 4, 702);
     			attr_dev(div1, "class", "container svelte-125guc8");
-    			add_location(div1, file$2, 18, 0, 395);
+    			add_location(div1, file$2, 18, 0, 371);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -2586,6 +2590,10 @@ var app = (function () {
 
     			if (dirty & /*userId*/ 1 && a_id_value !== (a_id_value = `chatterbox-button-${/*userId*/ ctx[0]}`)) {
     				attr_dev(a, "id", a_id_value);
+    			}
+
+    			if (dirty & /*disabled*/ 4) {
+    				toggle_class(a, "disabled", /*disabled*/ ctx[2]);
     			}
     		},
     		i: noop,
@@ -2611,6 +2619,16 @@ var app = (function () {
     	validate_slots('ChatButton', slots, []);
     	let { userId = null } = $$props;
     	let { name = "" } = $$props;
+    	let disabled = true;
+
+    	onMount(() => {
+    		app$1.subscribe(({ isChatterboxLoaded }) => {
+    			if (isChatterboxLoaded) {
+    				$$invalidate(2, disabled = !isChatterboxLoaded);
+    			}
+    		});
+    	});
+
     	const writable_props = ['userId', 'name'];
 
     	Object.keys($$props).forEach(key => {
@@ -2622,18 +2640,19 @@ var app = (function () {
     		if ('name' in $$props) $$invalidate(1, name = $$props.name);
     	};
 
-    	$$self.$capture_state = () => ({ onMount, app: app$1, userId, name });
+    	$$self.$capture_state = () => ({ onMount, app: app$1, userId, name, disabled });
 
     	$$self.$inject_state = $$props => {
     		if ('userId' in $$props) $$invalidate(0, userId = $$props.userId);
     		if ('name' in $$props) $$invalidate(1, name = $$props.name);
+    		if ('disabled' in $$props) $$invalidate(2, disabled = $$props.disabled);
     	};
 
     	if ($$props && "$$inject" in $$props) {
     		$$self.$inject_state($$props.$$inject);
     	}
 
-    	return [userId, name];
+    	return [userId, name, disabled];
     }
 
     class ChatButton extends SvelteComponentDev {
@@ -2741,22 +2760,22 @@ var app = (function () {
     			p = element("p");
     			p.textContent = "This is the public home page of the application.";
     			attr_dev(div0, "class", "btn-container padding svelte-1lqrt74");
-    			add_location(div0, file$1, 33, 8, 900);
+    			add_location(div0, file$1, 35, 8, 972);
     			attr_dev(div1, "class", "header svelte-1lqrt74");
-    			add_location(div1, file$1, 32, 4, 871);
+    			add_location(div1, file$1, 34, 4, 943);
     			attr_dev(a, "href", "#");
     			attr_dev(a, "class", "btn-sign-out svelte-1lqrt74");
-    			add_location(a, file$1, 39, 4, 1191);
+    			add_location(a, file$1, 41, 4, 1263);
     			attr_dev(img, "alt", "AGIL Logo");
     			attr_dev(img, "class", "logo svelte-1lqrt74");
     			if (!src_url_equal(img.src, img_src_value = "https://avatars.githubusercontent.com/u/93910532?s=200&v=4")) attr_dev(img, "src", img_src_value);
-    			add_location(img, file$1, 41, 8, 1297);
-    			add_location(h1, file$1, 47, 8, 1452);
-    			add_location(p, file$1, 48, 8, 1494);
+    			add_location(img, file$1, 43, 8, 1369);
+    			add_location(h1, file$1, 49, 8, 1524);
+    			add_location(p, file$1, 50, 8, 1566);
     			attr_dev(div2, "class", "padding center svelte-1lqrt74");
-    			add_location(div2, file$1, 40, 4, 1260);
+    			add_location(div2, file$1, 42, 4, 1332);
     			attr_dev(main, "class", "svelte-1lqrt74");
-    			add_location(main, file$1, 31, 0, 860);
+    			add_location(main, file$1, 33, 0, 932);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -2830,6 +2849,8 @@ var app = (function () {
     	};
 
     	onMount(() => {
+    		window.postMessage({ action: "init-chatterbox" });
+
     		// Redirect to login if not authenticated
     		auth.subscribe(({ user }) => {
     			if (!user) {
@@ -2839,8 +2860,8 @@ var app = (function () {
     		});
 
     		window.addEventListener("message", event => {
+    			console.log("parent received message", event.data);
     			const data = event?.data;
-    			console.log(`Received message:`, data);
 
     			if (data.action === "chatterbox-loaded") {
     				app$1.set({ isChatterboxLoaded: true });
