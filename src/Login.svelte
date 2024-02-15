@@ -1,5 +1,5 @@
 <script>
-    import { auth } from "./stores/auth.ts";
+    import auth from "./stores/auth.ts";
     import { navigate } from "svelte-routing";
 
     let username = "";

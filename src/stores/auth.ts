@@ -13,4 +13,4 @@ interface Auth {
     user: User | null;
 }
 
-export const auth = storage<Auth>("auth", { user: null })
+export default storage<Auth>("auth", { user: null })
