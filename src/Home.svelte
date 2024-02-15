@@ -11,6 +11,8 @@
     };
 
     onMount(() => {
+        window.postMessage({ action: "init-chatterbox" });
+
         // Redirect to login if not authenticated
         auth.subscribe(({ user }) => {
             if (!user) {
@@ -20,8 +22,8 @@
         });
 
         window.addEventListener("message", (event) => {
+            console.log("parent received message", event.data);
             const data = event?.data;
-            console.log(`Received message:`, data);
             if (data.action === "chatterbox-loaded") {
                 app.set({ isChatterboxLoaded: true });
             }
