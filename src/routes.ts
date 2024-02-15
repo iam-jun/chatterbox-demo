@@ -1,6 +1,6 @@
 import Home from './Home.svelte';
 import Login from './Login.svelte';
-import { auth } from './stores/auth';
+import auth from './stores/auth';
 
 const protectedRoutes = () => {
     return new Promise((resolve) => {
@@ -15,8 +15,8 @@ const protectedRoutes = () => {
 };
 
 const routes = {
-    '/login': Home,
-    '/': Home,
+    '/login': protectedRoutes,
+    '/': protectedRoutes,
 };
 
 export default routes;

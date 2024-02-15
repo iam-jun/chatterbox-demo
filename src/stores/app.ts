@@ -6,7 +6,7 @@
 import storage from '../lib/store'
 
 interface App {
-    matrixSessionId: string | null
+    isChatterboxLoaded: boolean;
 }
 
-export const app = storage<App>("app", { matrixSessionId: null })
+export default storage<App>("app", { isChatterboxLoaded: false })
